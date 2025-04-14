@@ -33,23 +33,28 @@ jobs:
         id: simulation
         run: |
           # Run simulation and save output
-          mvn exec:java -pl modules/cloudsim-examples -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnergyAwareCloudSimExample > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1
+          mvn exec:java -pl modules/cloudsim-examples \
+            -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnergyAwareCloudSimExample \
+            > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1
 
           # Check if simulation succeeded
           if [ $? -ne 0 ]; then
             echo "::error::Simulation failed!"
+            echo "====== Simulation Logs Start ======"
+            cat $GITHUB_WORKSPACE/output/simulation_results.txt
+            echo "====== Simulation Logs End ======"
             exit 1
           fi
 
-          # Extract just the important results
+          # Extract important results
           FINAL_RESULTS=$(grep -A 100 "========== FINAL RESULTS ==========" $GITHUB_WORKSPACE/output/simulation_results.txt)
           POWER_RESULTS=$(grep -A 10 "Total Energy Consumption" $GITHUB_WORKSPACE/output/simulation_results.txt | head -n 4)
 
-          # Combine and format results
+          # Combine and clean results
           COMBINED_RESULTS="$FINAL_RESULTS\n\n$POWER_RESULTS"
           CLEAN_RESULTS=$(echo "$COMBINED_RESULTS" | sed '/Downloading from/d' | sed '/Progress/d' | sed '/Downloaded/d')
 
-          # Output for later steps
+          # Output results for use in later steps
           echo "results<<EOF" >> $GITHUB_OUTPUT
           echo "$CLEAN_RESULTS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
