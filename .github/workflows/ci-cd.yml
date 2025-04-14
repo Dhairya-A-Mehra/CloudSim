@@ -1,4 +1,4 @@
-name: Java CI/CD for CloudSim Energy Simulation
+name: CI/CD Pipeline for CloudSim Simulation
 
 on:
   push:
@@ -7,34 +7,49 @@ on:
     branches: [main]
 
 jobs:
-  build-run-upload:
+  build-and-simulate:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Java 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v3
         with:
+          java-version: "21"
           distribution: "temurin"
-          java-version: "17"
 
-      - name: Compile CloudSimPlus example
+      - name: Create output directory
         run: |
-          mkdir -p out
-          find cloudsim-examples/src/main/java -name "*.java" > sources.txt
-          javac -d out -cp "cloudsim/lib/*" @sources.txt
+          mkdir -p $GITHUB_WORKSPACE/output
+          echo "Output directory created"
 
-      - name: Run EnergyAwareCloudSimExample
+      - name: Build and Install All Modules
         run: |
-          java -cp "out:cloudsim/lib/*" org.cloudbus.cloudsim.examples.EnergyAwareCloudSimExample
+          mvn clean install -DskipTests
+          echo "Build completed successfully"
 
-      - name: Upload simulation artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: simulation-output
-          path: |
-            energy_usage.png
-            *.log
-            logs/
+      - name: Run Simulation and Capture Results
+        id: simulation
+        run: |
+          # Run simulation and save output
+          mvn exec:java -pl modules/cloudsim-examples -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnergyAwareCloudSimExample > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1
+
+          # Check if simulation succeeded
+          if [ $? -ne 0 ]; then
+            echo "::error::Simulation failed!"
+            exit 1
+          fi
+
+          # Extract just the important results
+          FINAL_RESULTS=$(grep -A 100 "========== FINAL RESULTS ==========" $GITHUB_WORKSPACE/output/simulation_results.txt)
+          POWER_RESULTS=$(grep -A 10 "Total Energy Consumption" $GITHUB_WORKSPACE/output/simulation_results.txt | head -n 4)
+
+          # Combine and format results
+          COMBINED_RESULTS="$FINAL_RESULTS\n\n$POWER_RESULTS"
+          CLEAN_RESULTS=$(echo "$COMBINED_RESULTS" | sed '/Downloading from/d' | sed '/Progress/d' | sed '/Downloaded/d')
+
+          # Output for later steps
+          echo "results<<EOF" >> $GITHUB_OUTPUT
+          echo "$CLEAN_RESULTS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
