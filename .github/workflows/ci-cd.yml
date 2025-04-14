@@ -1,4 +1,4 @@
-name: CI/CD Pipeline for CloudSim Simulation
+name: Java CI/CD for CloudSim Energy Simulation
 
 on:
   push:
@@ -7,70 +7,34 @@ on:
     branches: [main]
 
 jobs:
-  build-and-simulate:
+  build-run-upload:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up JDK 21
+      - name: Set up Java 17
         uses: actions/setup-java@v3
         with:
-          java-version: "21"
           distribution: "temurin"
+          java-version: "17"
 
-      - name: Create output directory
+      - name: Compile CloudSimPlus example
         run: |
-          mkdir -p $GITHUB_WORKSPACE/output
-          echo "Output directory created"
+          mkdir -p out
+          find cloudsim-examples/src/main/java -name "*.java" > sources.txt
+          javac -d out -cp "cloudsim/lib/*" @sources.txt
 
-      - name: Build and Install All Modules
+      - name: Run EnergyAwareCloudSimExample
         run: |
-          mvn clean install -DskipTests
-          echo "Build completed successfully"
+          java -cp "out:cloudsim/lib/*" org.cloudbus.cloudsim.examples.EnergyAwareCloudSimExample
 
-      - name: Run Simulation and Capture Results
-        id: simulation
-        run: |
-          # Run simulation and save output
-          mvn exec:java -pl modules/cloudsim-examples -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnergyAwareCloudSimExample > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1
-
-          # Check if simulation succeeded
-          if [ $? -ne 0 ]; then
-            echo "::error::Simulation failed!"
-            exit 1
-          fi
-
-          # Extract just the important results
-          FINAL_RESULTS=$(grep -A 100 "========== FINAL RESULTS ==========" $GITHUB_WORKSPACE/output/simulation_results.txt)
-          POWER_RESULTS=$(grep -A 10 "Total Energy Consumption" $GITHUB_WORKSPACE/output/simulation_results.txt | head -n 4)
-
-          # Combine and format results
-          COMBINED_RESULTS="$FINAL_RESULTS\n\n$POWER_RESULTS"
-          CLEAN_RESULTS=$(echo "$COMBINED_RESULTS" | sed '/Downloading from/d' | sed '/Progress/d' | sed '/Downloaded/d')
-
-          # Output for Slack
-          echo "results<<EOF" >> $GITHUB_OUTPUT
-          echo "$CLEAN_RESULTS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Send Slack Notification
-        if: success()
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          # Format the message with a mention to trigger notification
-          MESSAGE="<!here> *CloudSim Simulation Completed Successfully!* :white_check_mark:\n\n"
-          MESSAGE+="\`\`\`"
-          MESSAGE+="${{ steps.simulation.outputs.results }}"
-          MESSAGE+="\`\`\`"
-
-          # Send to Slack with more notification-friendly format
-          curl -X POST -H 'Content-type: application/json' \
-            --data "{
-              \"text\":\"$MESSAGE\",
-              \"username\":\"GitHub Actions\",
-              \"icon_emoji\":\":github:\",
-              \"mrkdwn\": true
-            }" \
-            $SLACK_WEBHOOK
+      - name: Upload simulation artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: simulation-output
+          path: |
+            energy_usage.png
+            *.log
+            logs/
