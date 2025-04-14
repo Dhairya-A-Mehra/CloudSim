@@ -11,24 +11,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Updated to v4
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4 # Updated to v4
         with:
           java-version: "21"
           distribution: "temurin"
-
-      - name: Cache Maven dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2-
+          cache: "maven"
 
       - name: Create output directory
         run: |
-          mkdir -p $GITHUB_WORKSPACE/output
+          mkdir -p ./output
           echo "Output directory created"
 
       - name: Build and Install All Modules
@@ -46,27 +40,27 @@ jobs:
           echo "Starting simulation..."
           mvn exec:java -pl modules/cloudsim-examples \
             -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnergyAwareCloudSimExample \
-            > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1 || SIM_EXIT_CODE=$?
+            > ./output/simulation_results.txt 2>&1 || SIM_EXIT_CODE=$?
 
           # Check if simulation failed
           if [ -n "${SIM_EXIT_CODE}" ]; then
             echo "::error::Simulation failed with exit code ${SIM_EXIT_CODE}"
             echo "===== ERROR OUTPUT ====="
-            cat $GITHUB_WORKSPACE/output/simulation_results.txt
+            cat ./output/simulation_results.txt
             exit 1
           fi
 
           # Verify successful completion
-          if ! grep -q "========== ENERGY-AWARE SCHEDULING RESULTS ==========" $GITHUB_WORKSPACE/output/simulation_results.txt; then
+          if ! grep -q "========== ENERGY-AWARE SCHEDULING RESULTS ==========" ./output/simulation_results.txt; then
             echo "::error::Simulation completed but missing expected results"
             echo "===== LAST 50 LINES ====="
-            tail -n 50 $GITHUB_WORKSPACE/output/simulation_results.txt
+            tail -n 50 ./output/simulation_results.txt
             exit 1
           fi
 
           # Extract and format results
-          FINAL_RESULTS=$(grep -A 50 "========== ENERGY-AWARE SCHEDULING RESULTS ==========" $GITHUB_WORKSPACE/output/simulation_results.txt)
-          POWER_RESULTS=$(grep -A 10 "Total Energy:" $GITHUB_WORKSPACE/output/simulation_results.txt)
+          FINAL_RESULTS=$(grep -A 50 "========== ENERGY-AWARE SCHEDULING RESULTS ==========" ./output/simulation_results.txt)
+          POWER_RESULTS=$(grep -A 10 "Total Energy:" ./output/simulation_results.txt)
 
           # Output results summary
           echo "===== SIMULATION RESULTS ====="
@@ -76,20 +70,20 @@ jobs:
 
           # Handle generated files
           if [ -f "energy_usage.png" ]; then
-            mv energy_usage.png $GITHUB_WORKSPACE/output/
+            mv energy_usage.png ./output/
             echo "Generated chart saved to output/"
           fi
           if [ -f "power_data.csv" ]; then
-            mv power_data.csv $GITHUB_WORKSPACE/output/
+            mv power_data.csv ./output/
             echo "Power data saved to output/"
           fi
 
       - name: Upload Artifacts
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # Updated to v4
         with:
           name: simulation-results
           path: |
-            $GITHUB_WORKSPACE/output/simulation_results.txt
-            $GITHUB_WORKSPACE/output/energy_usage.png
-            $GITHUB_WORKSPACE/output/power_data.csv
+            ./output/simulation_results.txt
+            ./output/energy_usage.png
+            ./output/power_data.csv
