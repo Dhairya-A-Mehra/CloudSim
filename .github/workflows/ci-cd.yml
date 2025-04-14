@@ -19,6 +19,13 @@ jobs:
           java-version: "21"
           distribution: "temurin"
 
+      - name: Cache Maven dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2-
+
       - name: Create output directory
         run: |
           mkdir -p $GITHUB_WORKSPACE/output
@@ -32,29 +39,57 @@ jobs:
       - name: Run Simulation and Capture Results
         id: simulation
         run: |
-          # Run simulation and save output
+          # Enable debug logging
+          export CLOUDSIM_LOGLEVEL=DEBUG
+
+          # Run simulation with full output
+          echo "Starting simulation..."
           mvn exec:java -pl modules/cloudsim-examples \
             -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnergyAwareCloudSimExample \
-            > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1
+            > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1 || SIM_EXIT_CODE=$?
 
-          # Check if simulation succeeded
-          if [ $? -ne 0 ]; then
-            echo "::error::Simulation failed!"
-            echo "====== Simulation Logs Start ======"
+          # Check if simulation failed
+          if [ -n "${SIM_EXIT_CODE}" ]; then
+            echo "::error::Simulation failed with exit code ${SIM_EXIT_CODE}"
+            echo "===== ERROR OUTPUT ====="
             cat $GITHUB_WORKSPACE/output/simulation_results.txt
-            echo "====== Simulation Logs End ======"
             exit 1
           fi
 
-          # Extract important results
-          FINAL_RESULTS=$(grep -A 100 "========== FINAL RESULTS ==========" $GITHUB_WORKSPACE/output/simulation_results.txt)
-          POWER_RESULTS=$(grep -A 10 "Total Energy Consumption" $GITHUB_WORKSPACE/output/simulation_results.txt | head -n 4)
+          # Verify successful completion
+          if ! grep -q "========== ENERGY-AWARE SCHEDULING RESULTS ==========" $GITHUB_WORKSPACE/output/simulation_results.txt; then
+            echo "::error::Simulation completed but missing expected results"
+            echo "===== LAST 50 LINES ====="
+            tail -n 50 $GITHUB_WORKSPACE/output/simulation_results.txt
+            exit 1
+          fi
 
-          # Combine and clean results
-          COMBINED_RESULTS="$FINAL_RESULTS\n\n$POWER_RESULTS"
-          CLEAN_RESULTS=$(echo "$COMBINED_RESULTS" | sed '/Downloading from/d' | sed '/Progress/d' | sed '/Downloaded/d')
+          # Extract and format results
+          FINAL_RESULTS=$(grep -A 50 "========== ENERGY-AWARE SCHEDULING RESULTS ==========" $GITHUB_WORKSPACE/output/simulation_results.txt)
+          POWER_RESULTS=$(grep -A 10 "Total Energy:" $GITHUB_WORKSPACE/output/simulation_results.txt)
 
-          # Output results for use in later steps
-          echo "results<<EOF" >> $GITHUB_OUTPUT
-          echo "$CLEAN_RESULTS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Output results summary
+          echo "===== SIMULATION RESULTS ====="
+          echo "$FINAL_RESULTS"
+          echo ""
+          echo "$POWER_RESULTS"
+
+          # Handle generated files
+          if [ -f "energy_usage.png" ]; then
+            mv energy_usage.png $GITHUB_WORKSPACE/output/
+            echo "Generated chart saved to output/"
+          fi
+          if [ -f "power_data.csv" ]; then
+            mv power_data.csv $GITHUB_WORKSPACE/output/
+            echo "Power data saved to output/"
+          fi
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: simulation-results
+          path: |
+            $GITHUB_WORKSPACE/output/simulation_results.txt
+            $GITHUB_WORKSPACE/output/energy_usage.png
+            $GITHUB_WORKSPACE/output/power_data.csv
