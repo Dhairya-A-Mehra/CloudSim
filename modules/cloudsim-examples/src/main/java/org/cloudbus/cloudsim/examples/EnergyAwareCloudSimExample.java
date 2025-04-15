@@ -51,9 +51,9 @@ public class EnergyAwareCloudSimExample {
     private static List<Double> powerOverTime = new ArrayList<>();
     private static List<Double> timeStamps = new ArrayList<>();
     private static final Logger logger = LoggerFactory.getLogger(EnergyAwareCloudSimExample.class);
-    private static final int HOSTS = 5;
-    private static final int VMS = 10;
-    private static final int CLOUDLETS = 20;
+    private static final int HOSTS = 8;
+    private static final int VMS = 5;
+    private static final int CLOUDLETS = 30;
     private static final double SCHEDULING_INTERVAL = 1.0;
     private static double totalEnergy = 0.0;
     private static Datacenter datacenter;
