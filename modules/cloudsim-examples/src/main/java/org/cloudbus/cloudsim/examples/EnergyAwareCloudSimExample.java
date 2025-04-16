@@ -51,9 +51,9 @@ public class EnergyAwareCloudSimExample {
     private static List<Double> powerOverTime = new ArrayList<>();
     private static List<Double> timeStamps = new ArrayList<>();
     private static final Logger logger = LoggerFactory.getLogger(EnergyAwareCloudSimExample.class);
-    private static final int HOSTS = 8;
-    private static final int VMS = 5;
-    private static final int CLOUDLETS = 30;
+    private static final int HOSTS = 5;
+    private static final int VMS = 10;
+    private static final int CLOUDLETS = 20;
     private static final double SCHEDULING_INTERVAL = 1.0;
     private static double totalEnergy = 0.0;
     private static Datacenter datacenter;
@@ -116,8 +116,8 @@ public class EnergyAwareCloudSimExample {
             // Increased resources - adjust these values as needed
             long mips = (i % 2 == 0) ? 3000 : 2500;
             int pes = (i % 2 == 0) ? 4 : 2;
-            long ram = (i % 3 == 0) ? 32768 : 24576; // 32GB or 24GB RAM
-            long bw = 10000; // Increased bandwidth (Mbps)
+            long ram = (i % 2 == 0) ? 65536 : 49152; // 64GB or 48GB RAM (double current values)
+            long bw = 80000; // Increased bandwidth (Mbps)
             long storage = 100000; // Increased storage (MB)
 
             Vm vm = new VmSimple(mips, pes)
